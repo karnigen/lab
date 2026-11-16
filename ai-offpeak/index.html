@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>AI Off-Peak Schedule</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f5f7fb;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 36px auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.7rem, 4vw, 2.3rem); }
+    h2 { margin: 0; font-size: 1.15rem; }
+    p { line-height: 1.55; }
+
+    .intro, .panel {
+      padding: 22px;
+      border: 1px solid #e0e5ef;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 3px 14px #1720330a;
+    }
+
+    .intro { margin-bottom: 18px; }
+    .intro p { margin: 0; color: #536078; }
+    .panel-heading, .day-tabs, .legend {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .panel-heading { justify-content: space-between; margin-bottom: 18px; }
+    .muted, .timezone { color: #64708a; font-size: .9rem; }
+    .timezone { margin: 0 0 16px; }
+
+    button {
+      min-height: 40px;
+      padding: 8px 13px;
+      border: 1px solid #cbd3e1;
+      border-radius: 8px;
+      background: white;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover { border-color: #6678a5; }
+    button:focus-visible { outline: 3px solid #8da7ff80; outline-offset: 2px; }
+    .day-tabs { gap: 8px; margin-bottom: 12px; }
+    .day-tab[aria-pressed="true"] { border-color: #244ec9; background: #edf2ff; color: #173da9; }
+    .current-time { margin: 0 0 14px; color: #173da9; font-weight: 700; }
+
+    .legend { gap: 16px; margin: 0 0 16px; color: #536078; font-size: .9rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 15px; height: 15px; border: 1px solid #cbd3e1; border-radius: 4px; background: #f1f3f7; }
+    .swatch.off-peak { border-color: #75c4a0; background: #d7f3e5; }
+    .swatch.peak { border-color: #e4a95c; background: #ffebc9; }
+    .now-swatch { width: 2px; height: 17px; background: #244ec9; }
+
+    .chart-scroll { overflow-x: auto; }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 190px minmax(864px, 1fr);
+      align-items: stretch;
+      gap: 10px 0;
+    }
+
+    .chart-label {
+      display: flex;
+      min-height: 52px;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3px;
+      padding: 8px 12px 8px 0;
+      color: #536078;
+      font-size: .82rem;
+    }
+
+    .chart-label strong { color: #172033; font-size: .95rem; }
+    .time-axis, .plot-area {
+      display: grid;
+      grid-template-columns: repeat(24, minmax(36px, 1fr));
+      min-width: 864px;
+    }
+
+    .time-axis { position: relative; }
+    .axis-hour {
+      display: grid;
+      min-height: 52px;
+      align-content: center;
+      justify-items: center;
+      gap: 3px;
+      border-left: 1px solid #e1e6ef;
+      color: #28334a;
+      font-size: .68rem;
+      line-height: 1;
+    }
+
+    .axis-hour .utc { font-weight: 700; }
+    .axis-hour .local { color: #65708a; font-size: .62rem; }
+
+    .plot-area {
+      position: relative;
+      min-height: 62px;
+      overflow: hidden;
+      border: 1px solid #e1e6ef;
+      border-radius: 8px;
+      background: #f1f3f7;
+    }
+
+    .schedule-segment {
+      z-index: 1;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 2px;
+      border-right: 1px solid #ffffffa8;
+      font-size: .72rem;
+      font-weight: 750;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .schedule-segment.off-peak { background: #d7f3e5; color: #15583b; }
+    .schedule-segment.peak { background: #ffebc9; color: #744507; }
+    .now-line {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #244ec9;
+      box-shadow: 0 0 0 1px #fff9;
+      pointer-events: none;
+    }
+
+    .exceptions {
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #f5f7fb;
+      color: #536078;
+      font-size: .9rem;
+    }
+
+    .exceptions p { margin: 0; }
+    .exceptions p + p { margin-top: 6px; }
+    .holiday-calendar { margin-top: 18px; }
+    .holiday-calendar h3 { margin: 0 0 6px; font-size: 1rem; }
+    .holiday-calendar > p { margin: 0 0 12px; color: #64708a; font-size: .85rem; }
+    .holiday-years { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .holiday-year { padding: 12px; border: 1px solid #e1e6ef; border-radius: 8px; }
+    .holiday-year h4 { margin: 0 0 8px; }
+    .holiday-year ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+    .holiday-year li { color: #536078; font-size: .85rem; }
+    .holiday-year time { color: #172033; font-weight: 650; }
+    .holiday-year li.today { padding: 7px; border-radius: 6px; background: #edf2ff; color: #173da9; }
+    .holiday-year li.today time { color: inherit; }
+    .today-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #244ec9;
+      color: white;
+      font-size: .65rem;
+      font-weight: 750;
+      letter-spacing: .03em;
+    }
+    .data-source { margin: 14px 0 0; color: #64708a; font-size: .85rem; }
+    .data-source a { color: #244ec9; }
+
+    .notice {
+      display: none;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #fff1d6;
+      color: #6b4400;
+    }
+
+    @media (max-width: 620px) {
+      main { width: min(100% - 20px, 1120px); margin: 16px auto; }
+      .intro, .panel { padding: 16px; }
+      .chart-grid { grid-template-columns: 150px minmax(864px, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="intro">
+      <h1>AI Off-Peak Schedule</h1>
+      <p>Compare the fixed off-peak and peak pricing hours for DeepSeek and Ollama. Schedule rules use UTC; the chart also shows the equivalent local clock time.</p>
+    </header>
+
+    <section class="panel" aria-labelledby="schedule-title">
+      <div class="panel-heading">
+        <h2 id="schedule-title">Weekly pricing schedule</h2>
+        <span class="muted">Times in UTC · local clock shown below</span>
+      </div>
+      <nav class="day-tabs" id="day-tabs" aria-label="Schedule day type"></nav>
+      <p class="current-time" id="current-time" aria-live="polite"></p>
+      <div class="legend" aria-label="Schedule legend">
+        <span><i class="swatch off-peak"></i> Off-peak</span>
+        <span><i class="swatch peak"></i> Peak</span>
+        <span><i class="now-swatch"></i> Current time</span>
+      </div>
+      <div class="chart-scroll">
+        <div class="chart-grid" id="chart" aria-live="polite"></div>
+      </div>
+      <div class="exceptions" id="exceptions"></div>
+      <section class="holiday-calendar" aria-labelledby="holiday-title">
+        <h3 id="holiday-title">Chinese public holidays</h3>
+        <p>DeepSeek is off-peak all day on these dates. The weekly chart shows the regular schedule outside these holidays. “TODAY” follows China Standard Time.</p>
+        <div class="holiday-years" id="holiday-years"></div>
+      </section>
+      <p class="data-source">Fixed schedule data: <a href="schedule.json">schedule.json</a>.</p>
+      <p class="data-source">Holiday dates: <a href="china-public-holidays.json">china-public-holidays.json</a>, sourced from <a id="holiday-source" target="_blank" rel="noopener noreferrer">Nager.Date</a>. Update this file when new year data is published.</p>
+      <div class="notice" id="notice" role="alert"></div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const dayTypes = [
+        { id: "weekdays", name: "Weekdays (Monday–Friday UTC)", referenceDay: 3 },
+        { id: "weekends", name: "Weekends (Saturday–Sunday UTC)", referenceDay: 6 }
+      ];
+      const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const dayTabs = document.querySelector("#day-tabs");
+      const chart = document.querySelector("#chart");
+      const currentTime = document.querySelector("#current-time");
+      const exceptions = document.querySelector("#exceptions");
+      const holidayYears = document.querySelector("#holiday-years");
+      const holidaySource = document.querySelector("#holiday-source");
+      const notice = document.querySelector("#notice");
+      let schedule;
+      let holidayCalendar;
+      let selectedDayType = "weekdays";
+
+      function showError(message) {
+        notice.textContent = message;
+        notice.style.display = "block";
+      }
+
+      function parseHour(value) {
+        const match = /^([01]\d|2[0-4]):00$/.exec(value);
+        if (!match) throw new Error(`Invalid UTC schedule time: ${value}`);
+        const hour = Number(match[1]);
+        if (hour > 24) throw new Error(`Invalid UTC schedule time: ${value}`);
+        return hour;
+      }
+
+      function getSegments(provider, dayType) {
+        const ranges = provider.schedules?.[dayType]?.peak;
+        if (!Array.isArray(ranges)) {
+          throw new Error(`Missing ${dayType} peak schedule for ${provider.name}.`);
+        }
+
+        const sortedRanges = ranges
+          .map(range => ({ start: parseHour(range.start), end: parseHour(range.end) }))
+          .sort((left, right) => left.start - right.start);
+        const segments = [];
+        let cursor = 0;
+
+        for (const range of sortedRanges) {
+          if (range.start < cursor || range.end <= range.start || range.end > 24) {
+            throw new Error(`Invalid or overlapping peak range for ${provider.name}.`);
+          }
+          if (range.start > cursor) segments.push({ start: cursor, end: range.start, status: "off-peak" });
+          segments.push({ ...range, status: "peak" });
+          cursor = range.end;
+        }
+
+        if (cursor < 24) segments.push({ start: cursor, end: 24, status: "off-peak" });
+        return segments;
+      }
+
+      function referenceDate(dayType) {
+        const now = new Date();
+        const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const currentDay = date.getUTCDay();
+        const currentMondayOffset = (currentDay + 6) % 7;
+        date.setUTCDate(date.getUTCDate() - currentMondayOffset);
+        date.setUTCDate(date.getUTCDate() + dayTypes.find(type => type.id === dayType).referenceDay - 1);
+        return date;
+      }
+
+      function formatLocalHour(instant) {
+        return new Intl.DateTimeFormat(undefined, {
+          timeZone: localTimeZone,
+          hour: "2-digit",
+          hourCycle: "h23"
+        }).format(instant);
+      }
+
+      function dateInChina(instant) {
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Shanghai",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).formatToParts(instant);
+        const value = type => parts.find(part => part.type === type).value;
+        return `${value("year")}-${value("month")}-${value("day")}`;
+      }
+
+      function makeAxis(date) {
+        const axis = document.createElement("div");
+        axis.className = "time-axis";
+        axis.setAttribute("aria-label", "UTC hours and equivalent local clock hours");
+
+        for (let hour = 0; hour < 24; hour += 1) {
+          const instant = new Date(Date.UTC(
+            date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), hour
+          ));
+          const tick = document.createElement("div");
+          tick.className = "axis-hour";
+          tick.title = `${String(hour).padStart(2, "0")}:00 UTC · ${formatLocalHour(instant)} local`;
+          tick.innerHTML = `<span class="utc">${String(hour).padStart(2, "0")}</span><span class="local">${formatLocalHour(instant)}</span>`;
+          axis.append(tick);
+        }
+        return axis;
+      }
+
+      function makePlot(provider, dayType) {
+        const plot = document.createElement("div");
+        plot.className = "plot-area";
+        plot.setAttribute("role", "img");
+        plot.setAttribute("aria-label", `${provider.name} ${dayType} schedule`);
+
+        for (const segment of getSegments(provider, dayType)) {
+          const block = document.createElement("div");
+          block.className = `schedule-segment ${segment.status}`;
+          block.style.gridColumn = `${segment.start + 1} / ${segment.end + 1}`;
+          const duration = segment.end - segment.start;
+          block.textContent = segment.status === "peak" ? "PEAK" : duration >= 3 ? "OFF-PEAK" : "OFF";
+          block.title = `${block.textContent} · ${String(segment.start).padStart(2, "0")}:00–${String(segment.end).padStart(2, "0")}:00 UTC`;
+          plot.append(block);
+        }
+
+        const marker = document.createElement("span");
+        marker.className = "now-line";
+        marker.setAttribute("aria-hidden", "true");
+        plot.append(marker);
+        return plot;
+      }
+
+      function updateCurrentTime() {
+        const now = new Date();
+        const localDescription = new Intl.DateTimeFormat(undefined, {
+          timeZone: localTimeZone,
+          weekday: "long",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short"
+        }).format(now);
+        currentTime.textContent = `Now: ${localDescription}`;
+        const position = (now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60) / 1440 * 100;
+        for (const marker of chart.querySelectorAll(".now-line")) {
+          marker.style.left = `${position}%`;
+          marker.title = `Current local time: ${localDescription}`;
+        }
+        const todayInChina = dateInChina(now);
+        for (const item of holidayYears.querySelectorAll("li")) {
+          const date = item.querySelector("time").dateTime;
+          const isToday = date === todayInChina;
+          item.classList.toggle("today", isToday);
+          if (isToday) {
+            item.setAttribute("aria-current", "date");
+            if (!item.querySelector(".today-badge")) {
+              const badge = document.createElement("span");
+              badge.className = "today-badge";
+              badge.textContent = "TODAY";
+              item.append(badge);
+            }
+          } else {
+            item.removeAttribute("aria-current");
+            item.querySelector(".today-badge")?.remove();
+          }
+        }
+      }
+
+      function render() {
+        dayTabs.replaceChildren();
+        for (const dayType of dayTypes) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "day-tab";
+          button.setAttribute("aria-pressed", String(dayType.id === selectedDayType));
+          button.textContent = dayType.name;
+          button.addEventListener("click", () => {
+            selectedDayType = dayType.id;
+            render();
+          });
+          dayTabs.append(button);
+        }
+
+        chart.replaceChildren();
+        const heading = document.createElement("div");
+        heading.className = "chart-label";
+        heading.innerHTML = "<strong>Provider</strong><span>UTC / local time</span>";
+        chart.append(heading, makeAxis(referenceDate(selectedDayType)));
+
+        for (const provider of schedule.providers) {
+          const info = document.createElement("div");
+          info.className = "chart-label";
+          const name = document.createElement("strong");
+          name.textContent = provider.name;
+          const description = document.createElement("span");
+          description.textContent = provider.description;
+          info.append(name, description);
+          chart.append(info, makePlot(provider, selectedDayType));
+        }
+
+        exceptions.replaceChildren();
+        for (const provider of schedule.providers) {
+          for (const exception of provider.exceptions || []) {
+            const note = document.createElement("p");
+            note.textContent = `${provider.name}: ${exception}`;
+            exceptions.append(note);
+          }
+        }
+        exceptions.hidden = exceptions.childElementCount === 0;
+        holidayYears.replaceChildren();
+        for (const [year, dates] of Object.entries(holidayCalendar.years).sort(([left], [right]) => left.localeCompare(right))) {
+          const yearSection = document.createElement("section");
+          yearSection.className = "holiday-year";
+          const yearHeading = document.createElement("h4");
+          yearHeading.textContent = year;
+          const list = document.createElement("ul");
+          for (const holiday of dates) {
+            const item = document.createElement("li");
+            const date = document.createElement("time");
+            date.dateTime = holiday.date;
+            date.textContent = holiday.date;
+            item.append(date, ` · ${holiday.name}`);
+            list.append(item);
+          }
+          yearSection.append(yearHeading, list);
+          holidayYears.append(yearSection);
+        }
+        holidaySource.href = holidayCalendar.sourceUrl.replace("{year}", new Date().getFullYear());
+        updateCurrentTime();
+      }
+
+      async function loadSchedule() {
+        try {
+          const [scheduleResponse, holidayResponse] = await Promise.all([
+            fetch("./schedule.json"),
+            fetch("./china-public-holidays.json")
+          ]);
+          if (!scheduleResponse.ok) throw new Error(`Could not load schedule.json (HTTP ${scheduleResponse.status}).`);
+          if (!holidayResponse.ok) throw new Error(`Could not load china-public-holidays.json (HTTP ${holidayResponse.status}).`);
+          [schedule, holidayCalendar] = await Promise.all([
+            scheduleResponse.json(),
+            holidayResponse.json()
+          ]);
+          if (!schedule || !Array.isArray(schedule.providers) || schedule.providers.length === 0) {
+            throw new Error("schedule.json does not contain a valid provider list.");
+          }
+          if (!holidayCalendar || typeof holidayCalendar.years !== "object" || !holidayCalendar.sourceUrl) {
+            throw new Error("china-public-holidays.json does not contain a valid holiday calendar.");
+          }
+          render();
+        } catch (error) {
+          showError(`Could not display the schedule: ${error.message}`);
+        }
+      }
+
+      loadSchedule();
+      window.setInterval(updateCurrentTime, 30_000);
+    })();
+  </script>
+</body>
+</html>

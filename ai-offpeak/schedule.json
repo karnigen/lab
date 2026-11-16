@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "description": "Off-peak rates are half of peak rates.",
+      "schedules": {
+        "weekdays": {
+          "peak": [
+            { "start": "01:00", "end": "04:00" },
+            { "start": "06:00", "end": "10:00" }
+          ]
+        },
+        "weekends": {
+          "peak": []
+        }
+      },
+      "exceptions": [
+        "Chinese public holidays are off-peak all day."
+      ]
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama",
+      "description": "Off-peak pricing applies outside the 12:00–18:00 UTC weekday window.",
+      "schedules": {
+        "weekdays": {
+          "peak": [
+            { "start": "12:00", "end": "18:00" }
+          ]
+        },
+        "weekends": {
+          "peak": []
+        }
+      },
+      "exceptions": []
+    }
+  ]
+}
