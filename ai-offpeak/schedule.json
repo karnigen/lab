@@ -23,7 +23,7 @@
     {
       "id": "ollama",
       "name": "Ollama",
-      "description": "Off-peak pricing applies outside the 12:00–18:00 UTC weekday window.",
+      "description": "Off-peak 12:00–18:00 UTC weekday window.",
       "schedules": {
         "weekdays": {
           "peak": [
